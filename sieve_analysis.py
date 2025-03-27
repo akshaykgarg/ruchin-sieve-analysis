@@ -3,6 +3,10 @@
 #this is for ruchin
 import numpy as np
 import matplotlib.pyplot as plt
+from colorama import init, Fore, Style
+
+# Initialize colorama for colored terminal output
+init()
 
 def interpolate(x1, y1, x2, y2, y):
     """Linear interpolation to find x given y"""
@@ -27,6 +31,13 @@ def find_diameter_at_percent(sieve_sizes, percent_passing, target_percent):
         return min(sieve_sizes)
     return max(sieve_sizes)
 
+def format_value(value, is_in_range):
+    """Format a value with color based on whether it's in range"""
+    if is_in_range:
+        return f"{value:.2f}"
+    else:
+        return f"{Fore.RED}{value:.2f}{Style.RESET_ALL}"
+
 def main():
     # Hardcoded beach sand sieve analysis data - in descending order of sieve size
     sieve_sizes_original = [28, 20, 19, 14, 10, 6.3, 5, 4.75, 3.35, 2.36, 2, 1.18, 0.600, 0.425, 0.212, 0.150, 0.075, 0.063, 0]
@@ -49,6 +60,21 @@ def main():
     cu = d60 / d10  # Coefficient of Uniformity
     so = np.sqrt(d75 / d25)  # Trask Sorting Coefficient
     
+    # Find percent passing for 0.063 mm
+    # Get the index where sieve size is 0.063 mm
+    try:
+        idx_063 = sieve_sizes_original.index(0.063)
+        percent_063 = percent_passing_original[idx_063]
+    except ValueError:
+        # If 0.063 mm is not an exact sieve size, interpolate
+        percent_063 = 0  # Default value from original data
+    
+    # Check against criteria
+    d50_in_range = 0.3 <= d50 <= 0.5
+    cu_in_range = 1.5 <= cu <= 2.5
+    so_in_range = so < 2
+    percent_063_in_range = percent_063 < 5
+    
     # Determine sorting description based on Trask Sorting Coefficient
     if so < 1.2:
         sorting_desc = "Very well sorted"
@@ -61,7 +87,7 @@ def main():
     else:
         sorting_desc = "Very poorly sorted"
     
-    # Print results
+    # Print basic results
     print("\n# Beach Sand Sieve Analysis Results")
     print("\n## Calculated Parameters")
     print(f"- D10 = {d10:.2f} mm")
@@ -72,8 +98,38 @@ def main():
     print(f"- Coefficient of Uniformity (Cu) = {cu:.2f}")
     print(f"- Trask Sorting Coefficient (So) = {so:.2f}")
     print(f"- Sorting Classification: {sorting_desc}")
+    print(f"- Percent passing 0.063 mm = {percent_063:.2f}%")
     
-    # Optional: Create a particle size distribution curve
+    # Print a table with criteria checking
+    print("\n## Compliance with Design Criteria")
+    print("-" * 80)
+    header = f"| {'Parameter':<30} | {'Value':<10} | {'Criteria':<20} | {'Status':<10} |"
+    print(header)
+    print("-" * 80)
+    
+    # D50 check
+    d50_formatted = format_value(d50, d50_in_range)
+    d50_status = "✓" if d50_in_range else "✗"
+    print(f"| {'D50 (mm)':<30} | {d50_formatted:<10} | {'0.3 to 0.5 mm':<20} | {d50_status:<10} |")
+    
+    # Coefficient of Uniformity check
+    cu_formatted = format_value(cu, cu_in_range)
+    cu_status = "✓" if cu_in_range else "✗"
+    print(f"| {'Coefficient of Uniformity (Cu)':<30} | {cu_formatted:<10} | {'1.5 to 2.5':<20} | {cu_status:<10} |")
+    
+    # Sorting Coefficient check
+    so_formatted = format_value(so, so_in_range)
+    so_status = "✓" if so_in_range else "✗"
+    print(f"| {'Trask Sorting Coefficient (So)':<30} | {so_formatted:<10} | {'< 2.0':<20} | {so_status:<10} |")
+    
+    # 0.063 mm check
+    percent_063_formatted = format_value(percent_063, percent_063_in_range)
+    percent_063_status = "✓" if percent_063_in_range else "✗"
+    print(f"| {'Percent passing 0.063 mm (%)':<30} | {percent_063_formatted:<10} | {'< 5%':<20} | {percent_063_status:<10} |")
+    
+    print("-" * 80)
+    
+    # Create a particle size distribution curve
     plt.figure(figsize=(10, 6))
     plt.semilogx(sieve_sizes_original, percent_passing_original, 'o-', linewidth=2)
     plt.grid(True, which="both", ls="-")
