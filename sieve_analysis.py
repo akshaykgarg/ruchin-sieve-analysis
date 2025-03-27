@@ -130,6 +130,66 @@ def generate_underflow_data(sieve_sizes, percent_passing, cutoff_size):
     
     return underflow_sizes, underflow_passing
 
+def generate_overflow_data(sieve_sizes, percent_passing, cutoff_size):
+    """
+    Generate overflow data for material retained on a given sieve size
+    Returns new sieve sizes and percent passing arrays for the overflow
+    
+    For overflow, we only keep material RETAINED on the cutoff sieve (particles larger than cutoff_size)
+    and recalculate percentages based on this subset of material
+    """
+    # Find indices for values just above and below the cutoff size
+    above_idx = None
+    below_idx = None
+    
+    for i, size in enumerate(sieve_sizes):
+        if size >= cutoff_size and (above_idx is None or size < sieve_sizes[above_idx]):
+            above_idx = i
+        if size <= cutoff_size and (below_idx is None or size > sieve_sizes[below_idx]):
+            below_idx = i
+    
+    # Find percentage passing the cutoff size (interpolate if necessary)
+    cutoff_percent = 0
+    if above_idx is not None and below_idx is not None:
+        cutoff_percent = interpolate(
+            sieve_sizes[above_idx], percent_passing[above_idx],
+            sieve_sizes[below_idx], percent_passing[below_idx],
+            cutoff_size
+        )
+    elif below_idx is not None:
+        cutoff_percent = percent_passing[below_idx]
+    
+    # Total material retained on the cutoff sieve (not passing through it)
+    retained_percent = 100.0 - cutoff_percent
+    
+    if retained_percent <= 0:
+        print(f"No material is retained on {cutoff_size} mm sieve")
+        return [], []
+    
+    # Create new arrays for overflow
+    overflow_sizes = []
+    overflow_passing = []
+    
+    # Add the cutoff size with 0% passing (everything is retained)
+    overflow_sizes.append(cutoff_size)
+    overflow_passing.append(0.0)
+    
+    # Add all larger sieve sizes with recalculated percentages
+    for i, size in enumerate(sieve_sizes):
+        if size > cutoff_size:
+            # For overflow, we recalculate percent passing as:
+            # (original_passing - cutoff_passing) / (100 - cutoff_passing) * 100
+            new_percent = (percent_passing[i] - cutoff_percent) / retained_percent * 100.0
+            overflow_sizes.append(size)
+            overflow_passing.append(new_percent)
+    
+    # Sort by descending sieve size (largest first)
+    sorted_indices = np.argsort(overflow_sizes)[::-1]
+    overflow_sizes = [overflow_sizes[i] for i in sorted_indices]
+    overflow_passing = [overflow_passing[i] for i in sorted_indices]
+    
+    return overflow_sizes, overflow_passing
+
 def evaluate_criteria(results):
     """
     Evaluate the sample against the specified criteria
@@ -438,7 +498,7 @@ def plot_with_envelope(results_list, criteria_eval_list, filename="grading_envel
 def main():
     # Complete beach sand sieve analysis data - in descending order of sieve size
     sieve_sizes_original = [28, 20, 19, 14, 10, 6.3, 5, 4.75, 3.35, 2.36, 2, 1.18, 0.600, 0.425, 0.300, 0.212, 0.150, 0.075, 0.063, 0]
-    percent_passing_original = [100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 99.0, 90.0, 87.0, 59.0, 38.0, 21.0, 14.0, 9.0, 5.0, 0.0, 0.0, 0.0]
+    percent_passing_original = [100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 67.5, 53.8, 43.8, 32.6, 1.1, 0.4, 0.0]
     
     # Part 1: Analyze the original sample
     print("\n===== ORIGINAL SAMPLE ANALYSIS =====")
@@ -464,11 +524,20 @@ def main():
     
     # Part 3: Analyze the 0.075mm screen overflow (from 1mm underflow)
     print("\n===== 0.075mm SCREEN OVERFLOW ANALYSIS (FROM 1mm UNDERFLOW) =====")
-    # For the overflow, we keep all the same material but remove any passing below 0.075mm
-    # In this case, since nothing passes 0.075mm in the underflow, the results are identical
-    overflow_results = analyze_sample(underflow_1mm_sizes, underflow_1mm_passing, "0.075mm Screen Overflow")
+    # Calculate the proper overflow data (material retained on the 0.075mm sieve)
+    overflow_sizes, overflow_passing = generate_overflow_data(underflow_1mm_sizes, underflow_1mm_passing, 0.075)
+    overflow_results = analyze_sample(overflow_sizes, overflow_passing, "0.075mm Screen Overflow")
     overflow_criteria = evaluate_criteria(overflow_results)
     print_analysis_results(overflow_results, overflow_criteria)
+    
+    # Print the overflow passing percentages for reference
+    print("\n0.075mm Screen Overflow - Sieve Analysis Data")
+    print("-" * 50)
+    print(f"{'Sieve Size (mm)':<15} | {'% Passing':<10}")
+    print("-" * 50)
+    for size, passing in zip(overflow_sizes, overflow_passing):
+        print(f"{size:<15.3f} | {passing:<10.1f}")
+    print("-" * 50)
     
     # Create individual plots for each analysis
     plot_distribution(original_results, "original_sample_distribution.png")
