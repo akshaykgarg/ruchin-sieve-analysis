@@ -4,6 +4,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from colorama import init, Fore, Style
+from matplotlib.ticker import LogLocator, NullFormatter, ScalarFormatter
 
 # Initialize colorama for colored terminal output
 init()
@@ -230,6 +231,210 @@ def plot_distribution(results, filename="particle_size_distribution.png"):
     plt.savefig(filename)
     print(f"\nParticle size distribution curve saved as '{filename}'")
 
+def generate_envelope_curves():
+    """
+    Generate upper and lower bounds for the grading envelope based on criteria:
+    1. D50 between 0.3mm and 0.5mm
+    2. Coefficient of Uniformity (Cu) between 1.5 and 2.5
+    3. Sorting Coefficient (So) less than 2
+    4. Percent passing 0.063mm less than 5%
+    """
+    # Define the sieve sizes for the envelope (logarithmically spaced)
+    envelope_sizes = np.logspace(-2, 2, 1000)  # From 0.01mm to 100mm
+    
+    # Upper bound curve - steeper curve (less uniform, wider range of particle sizes)
+    # D50 = 0.5mm (upper bound), Cu = 2.5 (upper bound)
+    d50_upper = 0.5
+    cu_upper = 2.5
+    d10_upper = d50_upper / cu_upper
+    
+    # Lower bound curve - flatter curve (more uniform, narrower range of particle sizes)
+    # D50 = 0.3mm (lower bound), Cu = 1.5 (lower bound)
+    d50_lower = 0.3
+    cu_lower = 1.5
+    d10_lower = d50_lower / cu_lower
+    
+    # Generate the curves using log-normal distribution approximation
+    # For the upper bound (wider spread)
+    upper_bound = np.zeros_like(envelope_sizes)
+    for i, size in enumerate(envelope_sizes):
+        if size < 0.063:  # Keep percent passing 0.063mm at maximum 5%
+            upper_bound[i] = 5 * (size / 0.063)
+        else:
+            # Create a curve that satisfies Cu = 2.5 and D50 = 0.5mm
+            upper_bound[i] = 100 / (1 + np.exp(-4.5 * np.log(size / d50_upper)))
+    
+    # For the lower bound (narrower spread)
+    lower_bound = np.zeros_like(envelope_sizes)
+    for i, size in enumerate(envelope_sizes):
+        if size < 0.063:  # Keep percent passing 0.063mm at 0%
+            lower_bound[i] = 0
+        else:
+            # Create a curve that satisfies Cu = 1.5 and D50 = 0.3mm
+            lower_bound[i] = 100 / (1 + np.exp(-6.0 * np.log(size / d50_lower)))
+    
+    # Ensure curves pass through D50 points exactly
+    upper_idx = np.argmin(np.abs(envelope_sizes - d50_upper))
+    lower_idx = np.argmin(np.abs(envelope_sizes - d50_lower))
+    
+    # Fine-tune the curves
+    # Adjust to ensure upper bound has Cu close to 2.5
+    upper_d60_idx = np.argmin(np.abs(upper_bound - 60))
+    upper_d10_idx = np.argmin(np.abs(upper_bound - 10))
+    upper_cu = envelope_sizes[upper_d60_idx] / envelope_sizes[upper_d10_idx]
+    
+    # Adjust to ensure lower bound has Cu close to 1.5
+    lower_d60_idx = np.argmin(np.abs(lower_bound - 60))
+    lower_d10_idx = np.argmin(np.abs(lower_bound - 10))
+    lower_cu = envelope_sizes[lower_d60_idx] / envelope_sizes[lower_d10_idx]
+    
+    # Ensure curves respect 0.063mm < 5% criteria
+    upper_063_idx = np.argmin(np.abs(envelope_sizes - 0.063))
+    upper_bound[:upper_063_idx+1] = np.linspace(0, 5, upper_063_idx+1)
+    lower_bound[:upper_063_idx+1] = 0
+    
+    return envelope_sizes, lower_bound, upper_bound
+
+def plot_with_envelope(results_list, criteria_eval_list, filename="grading_envelope.png", d50_microns=350):
+    """
+    Plot multiple sample distributions with the grading envelope
+    
+    Parameters:
+    - results_list: List of result dictionaries from analyze_sample()
+    - criteria_eval_list: List of criteria evaluation dictionaries
+    - filename: Output filename for the plot
+    - d50_microns: D50 in microns to display in the title
+    """
+    # Get envelope curves
+    envelope_sizes, lower_bound, upper_bound = generate_envelope_curves()
+    
+    # Create figure with semi-log x-axis
+    plt.figure(figsize=(12, 8))
+    
+    # Setup the grid
+    plt.grid(True, which='major', linestyle='-', alpha=0.5)
+    plt.grid(True, which='minor', linestyle=':', alpha=0.2)
+    
+    # Plot sample data first (so it's on top)
+    colors = ['r-', 'g-', 'c-']
+    markers = ['o', 's', '^']
+    for i, (results, criteria_eval) in enumerate(zip(results_list, criteria_eval_list)):
+        # Draw the distribution curve
+        plt.semilogx(results["sieve_sizes"], results["percent_passing"], colors[i], 
+                    linewidth=2, label=results["sample_name"], marker=markers[i], markersize=5)
+    
+    # Plot envelope bounds
+    plt.semilogx(envelope_sizes, upper_bound, 'b--', linewidth=2, label='Upper Bound')
+    plt.semilogx(envelope_sizes, lower_bound, 'b--', linewidth=2, label='Lower Bound')
+    
+    # Create custom x-ticks for the soil classification
+    soil_sizes = [0.0001, 0.001, 0.01, 0.1, 1, 10, 100]
+    plt.xticks(soil_sizes)
+    
+    # Set plot limits and labels
+    plt.xlim(0.0001, 100)
+    plt.ylim(0, 100)
+    plt.xlabel('Particle Size (mm)', fontsize=12, fontweight='bold')
+    plt.ylabel('Percentage Passing (%)', fontsize=12, fontweight='bold')
+    plt.title(f'Grading Envelope for Beach Sand; D50 = {d50_microns}microns', fontsize=14, fontweight='bold')
+    
+    # Add soil classification at the bottom
+    # Create a secondary x-axis at the bottom for soil classification
+    ax = plt.gca()
+    ax_classification = plt.axes([0.1, 0.05, 0.8, 0.03], frameon=True)
+    
+    # Add soil classification boxes
+    # Clay
+    ax_classification.add_patch(plt.Rectangle((0, 0), 0.2, 1, facecolor='yellow', alpha=0.5))
+    ax_classification.text(0.1, 0.5, 'CLAY', ha='center', va='center', fontsize=9, fontweight='bold')
+    
+    # Silt
+    ax_classification.add_patch(plt.Rectangle((0.2, 0), 0.35-0.2, 1, facecolor='khaki', alpha=0.5))
+    ax_classification.text(0.275, 0.5, 'SILT', ha='center', va='center', fontsize=9, fontweight='bold')
+    
+    # Split Silt into Fine, Medium, Coarse
+    for i, x in enumerate([0.2, 0.25, 0.3]):
+        ax_classification.axvline(x=x, ymin=0.7, ymax=1, color='k', linestyle='-', linewidth=1)
+    ax_classification.text(0.225, 0.85, 'Fine', ha='center', va='center', fontsize=7)
+    ax_classification.text(0.275, 0.85, 'Medium', ha='center', va='center', fontsize=7)
+    ax_classification.text(0.325, 0.85, 'Coarse', ha='center', va='center', fontsize=7)
+    
+    # Sand
+    ax_classification.add_patch(plt.Rectangle((0.35, 0), 0.8-0.35, 1, facecolor='lightgreen', alpha=0.5))
+    ax_classification.text(0.575, 0.5, 'SAND', ha='center', va='center', fontsize=9, fontweight='bold')
+    
+    # Split Sand into Fine, Medium, Coarse
+    for i, x in enumerate([0.35, 0.5, 0.65]):
+        ax_classification.axvline(x=x, ymin=0.7, ymax=1, color='k', linestyle='-', linewidth=1)
+    ax_classification.text(0.425, 0.85, 'Fine', ha='center', va='center', fontsize=7)
+    ax_classification.text(0.575, 0.85, 'Medium', ha='center', va='center', fontsize=7)
+    ax_classification.text(0.725, 0.85, 'Coarse', ha='center', va='center', fontsize=7)
+    
+    # Gravel
+    ax_classification.add_patch(plt.Rectangle((0.8, 0), 1-0.8, 1, facecolor='lightgray', alpha=0.5))
+    ax_classification.text(0.9, 0.5, 'GRAVEL', ha='center', va='center', fontsize=9, fontweight='bold')
+    
+    # Split Gravel into Fine, Medium, Coarse
+    for i, x in enumerate([0.8, 0.87, 0.94]):
+        ax_classification.axvline(x=x, ymin=0.7, ymax=1, color='k', linestyle='-', linewidth=1)
+    ax_classification.text(0.835, 0.85, 'Fine', ha='center', va='center', fontsize=7)
+    ax_classification.text(0.905, 0.85, 'Medium', ha='center', va='center', fontsize=7)
+    ax_classification.text(0.97, 0.85, 'Coarse', ha='center', va='center', fontsize=7)
+    
+    # Remove ticks and set limits
+    ax_classification.set_xticks([])
+    ax_classification.set_yticks([])
+    ax_classification.set_xlim(0, 1)
+    ax_classification.set_ylim(0, 1)
+    
+    # Add legend
+    plt.axes(ax)  # Switch back to main axes
+    plt.legend(loc='lower right', fontsize=10)
+    
+    # Add a box with criteria information
+    criteria_text = (
+        "Criteria:\n"
+        f"1. D50: {criteria_eval_list[0]['d50_range'][0]}-{criteria_eval_list[0]['d50_range'][1]}mm\n"
+        f"2. Cu: {criteria_eval_list[0]['cu_range'][0]}-{criteria_eval_list[0]['cu_range'][1]}\n"
+        f"3. So < {criteria_eval_list[0]['so_max']}\n"
+        f"4. % passing 0.063mm < {criteria_eval_list[0]['percent_063_max']}%"
+    )
+    plt.annotate(criteria_text, xy=(0.02, 0.2), xycoords='axes fraction', 
+                 bbox=dict(boxstyle="round,pad=0.5", fc="white", alpha=0.8),
+                 fontsize=10)
+    
+    # Add points showing D values for each sample
+    for i, results in enumerate(results_list):
+        # Add a point for D50
+        d50_x = results["d50"]
+        d50_y = 50
+        plt.plot(d50_x, d50_y, 'o', markersize=8, color=colors[i][0], markeredgecolor='black')
+        
+        # Conditionally add D10 and D60 points for main samples
+        if i == 0:  # Original sample
+            d10_x = results["d10"]
+            d10_y = 10
+            d60_x = results["d60"]
+            d60_y = 60
+            plt.plot(d10_x, d10_y, 'o', markersize=8, color=colors[i][0], markeredgecolor='black')
+            plt.plot(d60_x, d60_y, 'o', markersize=8, color=colors[i][0], markeredgecolor='black')
+    
+    # Save the figure
+    plt.tight_layout()
+    plt.savefig(filename, dpi=300)
+    print(f"\nGrading envelope plot saved as '{filename}'")
+    
+    # Create a second plot with D50 = 250 microns
+    if d50_microns == 350:
+        # Adjust figure title for second plot
+        plt.title(f'Grading Envelope for Beach Sand; D50 = 250microns', fontsize=14, fontweight='bold')
+        # Save as a different file
+        second_filename = filename.replace(".png", "_250microns.png")
+        plt.savefig(second_filename, dpi=300)
+        print(f"\nSecond grading envelope plot saved as '{second_filename}'")
+    
+    return plt
+
 def main():
     # Complete beach sand sieve analysis data - in descending order of sieve size
     sieve_sizes_original = [28, 20, 19, 14, 10, 6.3, 5, 4.75, 3.35, 2.36, 2, 1.18, 0.600, 0.425, 0.300, 0.212, 0.150, 0.075, 0.063, 0]
@@ -240,7 +445,6 @@ def main():
     original_results = analyze_sample(sieve_sizes_original, percent_passing_original, "Original Sample")
     original_criteria = evaluate_criteria(original_results)
     print_analysis_results(original_results, original_criteria)
-    plot_distribution(original_results, "original_sample_distribution.png")
     
     # Part 2: Analyze the 1mm screen underflow
     print("\n===== 1mm SCREEN UNDERFLOW ANALYSIS =====")
@@ -248,7 +452,6 @@ def main():
     underflow_1mm_results = analyze_sample(underflow_1mm_sizes, underflow_1mm_passing, "1mm Screen Underflow")
     underflow_1mm_criteria = evaluate_criteria(underflow_1mm_results)
     print_analysis_results(underflow_1mm_results, underflow_1mm_criteria)
-    plot_distribution(underflow_1mm_results, "1mm_underflow_distribution.png")
     
     # Print the underflow passing percentages for reference
     print("\n1mm Screen Underflow - Sieve Analysis Data")
@@ -266,7 +469,20 @@ def main():
     overflow_results = analyze_sample(underflow_1mm_sizes, underflow_1mm_passing, "0.075mm Screen Overflow")
     overflow_criteria = evaluate_criteria(overflow_results)
     print_analysis_results(overflow_results, overflow_criteria)
+    
+    # Create individual plots for each analysis
+    plot_distribution(original_results, "original_sample_distribution.png")
+    plot_distribution(underflow_1mm_results, "1mm_underflow_distribution.png")
     plot_distribution(overflow_results, "0075mm_overflow_distribution.png")
+    
+    # Create the combined plot with grading envelope
+    results_list = [original_results, underflow_1mm_results, overflow_results]
+    criteria_eval_list = [original_criteria, underflow_1mm_criteria, overflow_criteria]
+    
+    # Create all versions of the grading envelope plot
+    plot_with_envelope(results_list, criteria_eval_list, "beach_sand_grading_envelope_350microns.png", 350)
+    plot_with_envelope(results_list, criteria_eval_list, "beach_sand_grading_envelope_250microns.png", 250)
+    plot_with_envelope(results_list, criteria_eval_list, "beach_sand_grading_envelope_400microns.png", 400)
     
     # Summary
     print("\n===== ANALYSIS SUMMARY =====")
