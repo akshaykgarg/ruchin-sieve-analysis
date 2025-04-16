@@ -1,0 +1,160 @@
+{% extends 'base.html' %}
+
+{% block title %}All Samples - Beach Sand Analysis{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row">
+        <div class="col-12 mb-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="h2"><i class="bi bi-table"></i> All Samples</h1>
+                <a href="{{ url_for('upload') }}" class="btn btn-primary">
+                    <i class="bi bi-cloud-upload"></i> Upload New Sample
+                </a>
+            </div>
+            <hr>
+        </div>
+    </div>
+    
+    {% if samples %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-striped">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Name</th>
+                                    <th>Type</th>
+                                    <th>Date</th>
+                                    <th>Location</th>
+                                    <th>D50 (mm)</th>
+                                    <th>Cu</th>
+                                    <th>So</th>
+                                    <th>Criteria Met</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for sample in samples %}
+                                <tr>
+                                    <td>{{ sample.id }}</td>
+                                    <td>{{ sample.name }}</td>
+                                    <td>
+                                        {% if sample.type == 'original' %}
+                                            <span class="badge bg-primary">Original</span>
+                                        {% elif sample.type == 'underflow' %}
+                                            <span class="badge bg-success">1mm Underflow</span>
+                                        {% elif sample.type == 'overflow' %}
+                                            <span class="badge bg-info">0.075mm Overflow</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ sample.type }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ sample.date|formatdate }}</td>
+                                    <td>{{ sample.location or '-' }}</td>
+                                    <td>{{ "%.3f"|format(sample.d50) if sample.d50 else 'N/A' }}</td>
+                                    <td>{{ "%.2f"|format(sample.cu) if sample.cu else 'N/A' }}</td>
+                                    <td>{{ "%.2f"|format(sample.so) if sample.so else 'N/A' }}</td>
+                                    <td>
+                                        {% if sample.criteria_met is not none %}
+                                            <div class="progress" style="height: 20px;" title="{{ sample.criteria_met }}/4 criteria met">
+                                                <div class="progress-bar {% if sample.criteria_met == 4 %}bg-success{% elif sample.criteria_met >= 2 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                                     role="progressbar" 
+                                                     style="width: {{ (sample.criteria_met / 4) * 100 }}%"
+                                                     aria-valuenow="{{ sample.criteria_met }}" 
+                                                     aria-valuemin="0" 
+                                                     aria-valuemax="4">
+                                                    {{ sample.criteria_met }}/4
+                                                </div>
+                                            </div>
+                                        {% else %}
+                                            <span class="text-muted">Not analyzed</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{{ url_for('sample_detail', sample_id=sample.id) }}" class="btn btn-primary">
+                                                <i class="bi bi-graph-up"></i> View
+                                            </a>
+                                            <a href="{{ url_for('download', sample_id=sample.id) }}" class="btn btn-secondary">
+                                                <i class="bi bi-download"></i>
+                                            </a>
+                                            <button type="button" class="btn btn-danger" 
+                                                    data-bs-toggle="modal" 
+                                                    data-bs-target="#deleteModal" 
+                                                    data-sample-id="{{ sample.id }}"
+                                                    data-sample-name="{{ sample.name }}">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card bg-light">
+                <div class="card-body text-center p-5">
+                    <h3 class="mb-3">No samples found</h3>
+                    <p class="mb-4">Start analyzing your beach sand samples by uploading your first sieve analysis data.</p>
+                    <a href="{{ url_for('upload') }}" class="btn btn-primary btn-lg">
+                        <i class="bi bi-cloud-upload"></i> Upload First Sample
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel">Confirm Deletion</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete the sample <strong id="sampleName"></strong>?</p>
+                <p class="text-danger">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="deleteForm" method="POST" action="">
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Set up delete modal
+        const deleteModal = document.getElementById('deleteModal');
+        if (deleteModal) {
+            deleteModal.addEventListener('show.bs.modal', function(event) {
+                const button = event.relatedTarget;
+                const sampleId = button.getAttribute('data-sample-id');
+                const sampleName = button.getAttribute('data-sample-name');
+                
+                document.getElementById('sampleName').textContent = sampleName;
+                document.getElementById('deleteForm').action = '/delete/' + sampleId;
+            });
+        }
+    });
+</script>
+{% endblock %} 

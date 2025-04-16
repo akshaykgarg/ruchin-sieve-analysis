@@ -1,0 +1,282 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ sample.name }} - Sample Analysis{% endblock %}
+
+{% block additional_head %}
+<style>
+    .criteria-badge {
+        font-size: 0.85rem;
+        padding: 0.4rem 0.5rem;
+        margin-bottom: 0.5rem;
+        display: inline-block;
+    }
+    .parameter-card {
+        transition: transform 0.2s;
+    }
+    .parameter-card:hover {
+        transform: translateY(-5px);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Header and Actions -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h1 class="h2">{{ sample.name }}</h1>
+            <p class="lead text-secondary mb-0">
+                {% if sample.type == 'original' %}
+                    <span class="badge bg-primary">Original Sample</span>
+                {% elif sample.type == 'underflow' %}
+                    <span class="badge bg-success">1mm Underflow</span>
+                {% elif sample.type == 'overflow' %}
+                    <span class="badge bg-info">0.075mm Overflow</span>
+                {% endif %}
+                
+                <span class="ms-2">
+                    <i class="bi bi-calendar"></i> {{ sample.date|formatdate }}
+                </span>
+                
+                {% if sample.location %}
+                <span class="ms-2">
+                    <i class="bi bi-geo-alt"></i> {{ sample.location }}
+                </span>
+                {% endif %}
+            </p>
+        </div>
+        <div class="col-md-4 text-md-end">
+            <div class="btn-group">
+                <a href="{{ url_for('download', sample_id=sample.id) }}" class="btn btn-outline-primary">
+                    <i class="bi bi-download"></i> Download CSV
+                </a>
+                <button type="button" class="btn btn-outline-danger" 
+                        data-bs-toggle="modal" 
+                        data-bs-target="#deleteModal" 
+                        data-sample-id="{{ sample.id }}"
+                        data-sample-name="{{ sample.name }}">
+                    <i class="bi bi-trash"></i> Delete
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Key Parameters -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card parameter-card h-100 border-primary shadow-sm">
+                <div class="card-body text-center">
+                    <h3 class="h1 mb-0 {% if sample.d50_meets_criteria %}text-success{% else %}text-danger{% endif %}">
+                        {{ "%.3f"|format(sample.d50) }}
+                    </h3>
+                    <p class="text-muted mb-0">D50 (mm)</p>
+                    <hr>
+                    <div class="{% if sample.d50_meets_criteria %}text-success{% else %}text-danger{% endif %}">
+                        {% if sample.d50_meets_criteria %}
+                            <i class="bi bi-check-circle"></i> Within 0.25-0.35mm
+                        {% else %}
+                            <i class="bi bi-x-circle"></i> Not within 0.25-0.35mm
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card parameter-card h-100 border-primary shadow-sm">
+                <div class="card-body text-center">
+                    <h3 class="h1 mb-0 {% if sample.cu_meets_criteria %}text-success{% else %}text-danger{% endif %}">
+                        {{ "%.2f"|format(sample.cu) }}
+                    </h3>
+                    <p class="text-muted mb-0">Cu</p>
+                    <hr>
+                    <div class="{% if sample.cu_meets_criteria %}text-success{% else %}text-danger{% endif %}">
+                        {% if sample.cu_meets_criteria %}
+                            <i class="bi bi-check-circle"></i> Within 1.5-3.0
+                        {% else %}
+                            <i class="bi bi-x-circle"></i> Not within 1.5-3.0
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card parameter-card h-100 border-primary shadow-sm">
+                <div class="card-body text-center">
+                    <h3 class="h1 mb-0 {% if sample.so_meets_criteria %}text-success{% else %}text-danger{% endif %}">
+                        {{ "%.2f"|format(sample.so) }}
+                    </h3>
+                    <p class="text-muted mb-0">So</p>
+                    <hr>
+                    <div class="{% if sample.so_meets_criteria %}text-success{% else %}text-danger{% endif %}">
+                        {% if sample.so_meets_criteria %}
+                            <i class="bi bi-check-circle"></i> Within 1.2-1.7
+                        {% else %}
+                            <i class="bi bi-x-circle"></i> Not within 1.2-1.7
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card parameter-card h-100 border-primary shadow-sm">
+                <div class="card-body text-center">
+                    <h3 class="h1 mb-0 {% if sample.fines_meets_criteria %}text-success{% else %}text-danger{% endif %}">
+                        {{ "%.1f"|format(sample.percent_passing_0063) }}%
+                    </h3>
+                    <p class="text-muted mb-0">Passing 0.063mm</p>
+                    <hr>
+                    <div class="{% if sample.fines_meets_criteria %}text-success{% else %}text-danger{% endif %}">
+                        {% if sample.fines_meets_criteria %}
+                            <i class="bi bi-check-circle"></i> Less than 5%
+                        {% else %}
+                            <i class="bi bi-x-circle"></i> More than 5%
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Overall Criteria Assessment -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0">Overall Assessment</h5>
+                </div>
+                <div class="card-body">
+                    <div class="progress mb-3" style="height: 30px;">
+                        <div class="progress-bar progress-bar-striped 
+                                  {% if sample.criteria_met == 4 %}
+                                      bg-success
+                                  {% elif sample.criteria_met >= 2 %}
+                                      bg-warning
+                                  {% else %}
+                                      bg-danger
+                                  {% endif %}" 
+                             role="progressbar" 
+                             style="width: {{ (sample.criteria_met / 4) * 100 }}%" 
+                             aria-valuenow="{{ sample.criteria_met }}"
+                             aria-valuemin="0" 
+                             aria-valuemax="4">
+                            {{ sample.criteria_met }} of 4 criteria met ({{ (sample.criteria_met / 4) * 100 }}%)
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Criteria Met:</h6>
+                            <ul>
+                                {% if sample.d50_meets_criteria %}
+                                <li class="text-success">D50 between 0.25mm and 0.35mm</li>
+                                {% endif %}
+                                {% if sample.cu_meets_criteria %}
+                                <li class="text-success">Coefficient of Uniformity (Cu) between 1.5 and 3.0</li>
+                                {% endif %}
+                                {% if sample.so_meets_criteria %}
+                                <li class="text-success">Sorting Coefficient (So) between 1.2 and 1.7</li>
+                                {% endif %}
+                                {% if sample.fines_meets_criteria %}
+                                <li class="text-success">Less than 5% passing the 0.063mm sieve</li>
+                                {% endif %}
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Criteria Not Met:</h6>
+                            <ul>
+                                {% if not sample.d50_meets_criteria %}
+                                <li class="text-danger">D50 between 0.25mm and 0.35mm</li>
+                                {% endif %}
+                                {% if not sample.cu_meets_criteria %}
+                                <li class="text-danger">Coefficient of Uniformity (Cu) between 1.5 and 3.0</li>
+                                {% endif %}
+                                {% if not sample.so_meets_criteria %}
+                                <li class="text-danger">Sorting Coefficient (So) between 1.2 and 1.7</li>
+                                {% endif %}
+                                {% if not sample.fines_meets_criteria %}
+                                <li class="text-danger">Less than 5% passing the 0.063mm sieve</li>
+                                {% endif %}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Distribution Graph -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0">Particle Size Distribution</h5>
+                </div>
+                <div class="card-body">
+                    <img src="{{ url_for('static', filename='plots/' + sample.plot_file) }}" 
+                         class="img-fluid rounded" 
+                         alt="Particle Size Distribution">
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Data Table -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0">Sieve Analysis Data</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Sieve Size (mm)</th>
+                                    <th>Weight Retained (g)</th>
+                                    <th>Percent Retained (%)</th>
+                                    <th>Cumulative Retained (%)</th>
+                                    <th>Percent Passing (%)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in sieve_data %}
+                                <tr>
+                                    <td>{{ "%.4f"|format(row.sieve_size) if row.sieve_size != 'pan' else 'pan' }}</td>
+                                    <td>{{ "%.2f"|format(row.weight_retained) }}</td>
+                                    <td>{{ "%.2f"|format(row.percent_retained) }}</td>
+                                    <td>{{ "%.2f"|format(row.cumulative_retained) }}</td>
+                                    <td>{{ "%.2f"|format(row.percent_passing) }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel">Confirm Deletion</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete the sample <strong>{{ sample.name }}</strong>?</p>
+                <p class="text-danger">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form action="{{ url_for('delete', sample_id=sample.id) }}" method="POST">
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

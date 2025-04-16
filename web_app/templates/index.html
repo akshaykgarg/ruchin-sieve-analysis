@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+
+{% block title %}Beach Sand Analysis - Home{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="p-5 mb-4 bg-light rounded-3">
+        <div class="container-fluid py-5">
+            <h1 class="display-5 fw-bold">Beach Sand Analysis</h1>
+            <p class="col-md-8 fs-4">
+                Analyze beach sand samples using sieve analysis to determine key parameters like D50, Coefficient of Uniformity (Cu), 
+                and Sorting Coefficient (So).
+            </p>
+            <a href="{{ url_for('upload') }}" class="btn btn-primary btn-lg">Upload New Sample</a>
+            <a href="{{ url_for('samples') }}" class="btn btn-secondary btn-lg">View All Samples</a>
+        </div>
+    </div>
+
+    <div class="row align-items-md-stretch">
+        <div class="col-md-6">
+            <div class="h-100 p-5 text-white bg-dark rounded-3">
+                <h2>About Sieve Analysis</h2>
+                <p>
+                    Sieve analysis is a method to determine the particle size distribution of granular materials.
+                    It helps identify key parameters such as:
+                </p>
+                <ul>
+                    <li>D50 - Median particle size</li>
+                    <li>Cu - Coefficient of Uniformity</li>
+                    <li>So - Sorting Coefficient</li>
+                </ul>
+                <p>These parameters are crucial for designing beach replenishment projects.</p>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="h-100 p-5 bg-light border rounded-3">
+                <h2>Recent Samples</h2>
+                {% if recent_samples %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Date</th>
+                                <th>D50 (mm)</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for sample in recent_samples %}
+                            <tr>
+                                <td>{{ sample.name }}</td>
+                                <td>{{ sample.date|formatdate }}</td>
+                                <td>{{ "%.3f"|format(sample.d50) }}</td>
+                                <td>
+                                    <a href="{{ url_for('sample_detail', sample_id=sample.id) }}" 
+                                       class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-graph-up"></i> View
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p>No samples have been analyzed yet. <a href="{{ url_for('upload') }}">Upload your first sample</a>.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

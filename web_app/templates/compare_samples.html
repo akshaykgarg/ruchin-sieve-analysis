@@ -1,0 +1,213 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container">
+    <div class="row mb-3">
+        <div class="col-md-12">
+            <h1>Compare Samples</h1>
+            <a href="{{ url_for('index') }}" class="btn btn-secondary">Back to Samples</a>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-12">
+            <form action="{{ url_for('compare_samples') }}" method="post" class="mb-4">
+                <div class="card">
+                    <div class="card-header">Select Samples to Compare</div>
+                    <div class="card-body">
+                        <div class="row">
+                            {% for sample in all_samples %}
+                            <div class="col-md-4 mb-2">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="sample_ids" value="{{ sample.id }}" id="sample{{ sample.id }}" {% if sample.id in selected_sample_ids %}checked{% endif %}>
+                                    <label class="form-check-label" for="sample{{ sample.id }}">
+                                        {{ sample.name }}
+                                    </label>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <button type="submit" class="btn btn-primary">Compare Selected Samples</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    {% if samples %}
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">Analysis Comparison</div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Parameter</th>
+                                    {% for sample in samples %}
+                                    <th>{{ sample.name }}</th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <th>D10 (mm)</th>
+                                    {% for analysis in analyses %}
+                                    <td>{{ analysis.d10 }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <tr>
+                                    <th>D25 (mm)</th>
+                                    {% for analysis in analyses %}
+                                    <td>{{ analysis.d25 }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <tr>
+                                    <th>D50 (mm)</th>
+                                    {% for analysis in analyses %}
+                                    <td>{{ analysis.d50 }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <tr>
+                                    <th>D60 (mm)</th>
+                                    {% for analysis in analyses %}
+                                    <td>{{ analysis.d60 }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <tr>
+                                    <th>D75 (mm)</th>
+                                    {% for analysis in analyses %}
+                                    <td>{{ analysis.d75 }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <tr>
+                                    <th>Cu</th>
+                                    {% for analysis in analyses %}
+                                    <td>{{ analysis.cu }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <tr>
+                                    <th>So</th>
+                                    {% for analysis in analyses %}
+                                    <td>{{ analysis.so }}</td>
+                                    {% endfor %}
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mt-3">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">Particle Size Distribution Comparison</div>
+                <div class="card-body text-center">
+                    {% if combined_plot %}
+                    <img src="{{ url_for('static', filename=combined_plot) }}" class="img-fluid" alt="Combined Particle Size Distribution">
+                    {% else %}
+                    <p>No combined plot available. Try running the analysis on all selected samples first.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mt-3">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">Criteria Compliance Comparison</div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Criteria</th>
+                                    {% for sample in samples %}
+                                    <th>{{ sample.name }}</th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <th>D50 (0.25-0.35 mm)</th>
+                                    {% for criteria in criteria_results %}
+                                    <td class="{{ 'table-success' if criteria.d50_compliant else 'table-danger' }}">
+                                        {{ criteria.d50_actual }}
+                                        {% if criteria.d50_compliant %}
+                                        <span class="badge bg-success">✓</span>
+                                        {% else %}
+                                        <span class="badge bg-danger">✗</span>
+                                        {% endif %}
+                                    </td>
+                                    {% endfor %}
+                                </tr>
+                                <tr>
+                                    <th>Cu (&lt; 2.5)</th>
+                                    {% for criteria in criteria_results %}
+                                    <td class="{{ 'table-success' if criteria.cu_compliant else 'table-danger' }}">
+                                        {{ criteria.cu_actual }}
+                                        {% if criteria.cu_compliant %}
+                                        <span class="badge bg-success">✓</span>
+                                        {% else %}
+                                        <span class="badge bg-danger">✗</span>
+                                        {% endif %}
+                                    </td>
+                                    {% endfor %}
+                                </tr>
+                                <tr>
+                                    <th>So (1.1-1.7)</th>
+                                    {% for criteria in criteria_results %}
+                                    <td class="{{ 'table-success' if criteria.so_compliant else 'table-danger' }}">
+                                        {{ criteria.so_actual }}
+                                        {% if criteria.so_compliant %}
+                                        <span class="badge bg-success">✓</span>
+                                        {% else %}
+                                        <span class="badge bg-danger">✗</span>
+                                        {% endif %}
+                                    </td>
+                                    {% endfor %}
+                                </tr>
+                                <tr>
+                                    <th>Fine content (&lt; 5%)</th>
+                                    {% for criteria in criteria_results %}
+                                    <td class="{{ 'table-success' if criteria.fines_compliant else 'table-danger' }}">
+                                        {{ criteria.fines_actual }}%
+                                        {% if criteria.fines_compliant %}
+                                        <span class="badge bg-success">✓</span>
+                                        {% else %}
+                                        <span class="badge bg-danger">✗</span>
+                                        {% endif %}
+                                    </td>
+                                    {% endfor %}
+                                </tr>
+                                <tr class="table-primary">
+                                    <th>Total Compliance</th>
+                                    {% for criteria in criteria_results %}
+                                    <td>
+                                        {{ criteria.total_compliant }}/4
+                                        {% if criteria.total_compliant == 4 %}
+                                        <span class="badge bg-success">Fully Compliant</span>
+                                        {% elif criteria.total_compliant >= 2 %}
+                                        <span class="badge bg-warning">Partially Compliant</span>
+                                        {% else %}
+                                        <span class="badge bg-danger">Non-Compliant</span>
+                                        {% endif %}
+                                    </td>
+                                    {% endfor %}
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %} 
