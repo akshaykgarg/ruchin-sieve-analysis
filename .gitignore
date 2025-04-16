@@ -101,4 +101,15 @@ ENV/
 .idea/
 
 # Generated files
-particle_size_distribution.png 
+particle_size_distribution.png
+
+# Excel files
+*.xlsx
+*.xls
+~$*.xlsx
+~$*.xls
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3 
